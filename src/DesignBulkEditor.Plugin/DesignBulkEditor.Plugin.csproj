@@ -11,11 +11,11 @@
     <Author>Dennis</Author>
     <Punchline>Bulk-edit your Glamourer design library and preview changes live, without leaving the game.</Punchline>
     <Description>Group Glamourer designs by character, edit names/folders/properties across many designs at once, and preview a staged edit on your logged-in character before saving. Unofficial, community-built, not affiliated with Glamourer/Ottermandias.</Description>
-    <RepoUrl>https://github.com/demkadse/design-bulk-editor</RepoUrl>
+    <RepoUrl>https://github.com/STRNDV/design-bulk-editor</RepoUrl>
     <Tags>glamourer;appearance;bulk-edit</Tags>
     <!-- Only resolves once the repo is published under this name/branch; DalamudPackager
          only accepts a remote IconUrl, not a locally bundled file. -->
-    <IconUrl>https://raw.githubusercontent.com/demkadse/design-bulk-editor/main/images/icon.png</IconUrl>
+    <IconUrl>https://raw.githubusercontent.com/STRNDV/design-bulk-editor/main/images/icon.png</IconUrl>
   </PropertyGroup>
 
   <ItemGroup>

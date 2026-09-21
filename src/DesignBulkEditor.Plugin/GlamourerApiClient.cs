@@ -14,6 +14,13 @@ public sealed record GlamourerApiCallResult(bool Success, string? ErrorMessage)
     public static GlamourerApiCallResult Failed(string message) => new(false, message);
 }
 
+public sealed record GlamourerApiCallResult<T>(bool Success, T? Value, string? ErrorMessage)
+{
+    public static GlamourerApiCallResult<T> Ok(T value) => new(true, value, null);
+
+    public static GlamourerApiCallResult<T> Failed(string message) => new(false, default, message);
+}
+
 /// <summary>
 /// Thin wrapper around the official Glamourer.Api IPC (NuGet package
 /// "Glamourer.Api", MIT-licensed, maintained by Ottermandias alongside
@@ -36,6 +43,8 @@ public sealed class GlamourerApiClient
     private readonly ApiVersion _apiVersionSubscriber;
     private readonly ApplyState _applyStateSubscriber;
     private readonly RevertState _revertStateSubscriber;
+    private readonly GetDesignBase64 _getDesignBase64Subscriber;
+    private readonly AddDesign _addDesignSubscriber;
 
     public GlamourerApiClient(IDalamudPluginInterface pluginInterface, IPluginLog log)
     {
@@ -43,6 +52,8 @@ public sealed class GlamourerApiClient
         _apiVersionSubscriber = new ApiVersion(pluginInterface);
         _applyStateSubscriber = new ApplyState(pluginInterface);
         _revertStateSubscriber = new RevertState(pluginInterface);
+        _getDesignBase64Subscriber = new GetDesignBase64(pluginInterface);
+        _addDesignSubscriber = new AddDesign(pluginInterface);
 
         Refresh();
     }
@@ -115,12 +126,55 @@ public sealed class GlamourerApiClient
         }
     }
 
+    /// <summary> Exports a design already known to Glamourer (by its own Identifier GUID) as a shareable code, using Glamourer's own encoder. </summary>
+    public GlamourerApiCallResult<string> ExportDesignAsCode(string designIdentifier)
+    {
+        if (!IsAvailable)
+            return GlamourerApiCallResult<string>.Failed("Glamourer is not available.");
+
+        if (!Guid.TryParse(designIdentifier, out var guid))
+            return GlamourerApiCallResult<string>.Failed("Not a valid design identifier.");
+
+        try
+        {
+            var code = _getDesignBase64Subscriber.Invoke(guid);
+            return code is null
+                ? GlamourerApiCallResult<string>.Failed("Glamourer does not recognise this design.")
+                : GlamourerApiCallResult<string>.Ok(code);
+        }
+        catch (Exception ex)
+        {
+            return GlamourerApiCallResult<string>.Failed(ex.Message);
+        }
+    }
+
+    /// <summary> Imports a shared design code (or JSON) as a brand-new design in Glamourer's own library, using Glamourer's own decoder. </summary>
+    public GlamourerApiCallResult<Guid> ImportDesignFromCode(string codeOrJson, string name)
+    {
+        if (!IsAvailable)
+            return GlamourerApiCallResult<Guid>.Failed("Glamourer is not available.");
+
+        try
+        {
+            var ec = _addDesignSubscriber.Invoke(codeOrJson, name, out var createdGuid);
+            return ec == GlamourerApiEc.Success
+                ? GlamourerApiCallResult<Guid>.Ok(createdGuid)
+                : GlamourerApiCallResult<Guid>.Failed(DescribeError(ec));
+        }
+        catch (Exception ex)
+        {
+            return GlamourerApiCallResult<Guid>.Failed(ex.Message);
+        }
+    }
+
     private static string DescribeError(GlamourerApiEc code) => code switch
     {
         GlamourerApiEc.ActorNotFound => "The target actor was not found.",
         GlamourerApiEc.ActorNotHuman => "The target actor is not a human character.",
         GlamourerApiEc.InvalidKey => "The state is locked and could not be unlocked.",
         GlamourerApiEc.InvalidState => "Glamourer could not interpret this design as a valid state.",
+        GlamourerApiEc.CouldNotParse => "Glamourer could not parse that code - check it was copied in full.",
+        GlamourerApiEc.DesignNotFound => "Glamourer does not recognise this design.",
         _ => code.ToString(),
     };
 }

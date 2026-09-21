@@ -1,6 +1,6 @@
 # Design Bulk Editor
 
-[![Build](https://github.com/demkadse/design-bulk-editor/actions/workflows/build.yml/badge.svg)](https://github.com/demkadse/design-bulk-editor/actions/workflows/build.yml)
+[![Build](https://github.com/STRNDV/design-bulk-editor/actions/workflows/build.yml/badge.svg)](https://github.com/STRNDV/design-bulk-editor/actions/workflows/build.yml)
 
 A Dalamud plugin for bulk-editing your [Glamourer](https://github.com/Ottermandias/Glamourer)
 design library - rename designs, reorganise folders, and change a property
@@ -27,19 +27,29 @@ below.
 
 ## What it does (v1)
 
-- Loads your Glamourer `designs` folder and groups designs by character
+- Loads your Glamourer `designs` folder (with a folder-browse button) and
+  groups designs by character
 - Groups designs by character even if you don't use the "(Character) Design"
   naming convention - see [Character assignment](#character-assignment)
 - Lets you rename designs, change their folder, and edit any
   Customize/Equipment/Parameters property, individually or across many
-  designs at once
+  designs at once, with a fitting editor per value (checkbox, number field,
+  color picker, or text) instead of always a raw text box
+- Batch-renames character/design names across every targeted design with a
+  find-and-replace rule
 - Stages any number of property edits at the same time, freely switchable,
   with nothing discarded when you change your mind or move to a different
   property
+- Shows a diff - old value vs. new value, per design - before anything is
+  written to disk, so a bulk save is never a leap of faith
 - Previews a staged, *not-yet-saved* edit live on your logged-in character
   via Glamourer's own IPC, before you commit anything to disk
-- Backs up every design file automatically before it gets overwritten, and
-  writes atomically so a crash mid-save can never leave a half-written file
+- Backs up every design file automatically before it gets overwritten,
+  writes atomically so a crash mid-save can never leave a half-written
+  file, and lets you browse and one-click restore any previous backup of a
+  design (the restore itself is backed up too, so it's undoable)
+- Exports a design as a shareable Glamourer code, and imports a shared code
+  as a new design, using Glamourer's own encoder/decoder via its IPC
 - Never aborts a batch save partway through: if one design fails, the rest
   still get processed, and you get a clear per-design error report
 
@@ -49,7 +59,6 @@ below.
   (no NPCs, no other players)
 - Submitting to the official Dalamud plugin repository - for now this is a
   dev-plugin / self-hosted repo install only
-- Creating brand new designs from scratch (only editing existing ones)
 
 ## How the UX problem is actually fixed
 
@@ -114,6 +123,10 @@ hand-written or guessed IPC calls:
   Glamourer's own automation state.
 - `IGlamourerApiState.RevertState` reverts the preview back to your normal
   state.
+- `IGlamourerApiDesigns.GetDesignBase64` / `AddDesign` power the share-code
+  export/import, so encoding stays byte-for-byte compatible with Glamourer
+  itself instead of us reverse-engineering its (undocumented, binary) code
+  format.
 - Saving an edited design to disk is plain file I/O - there is no
   `UpdateDesign` call in Glamourer's IPC, so committing a change has always
   meant writing the JSON file directly, both in the old app and this one.
