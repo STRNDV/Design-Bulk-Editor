@@ -87,4 +87,23 @@ public sealed class DesignLibrary
 
     public Task<IReadOnlyList<DesignSaveResult>> SaveManyAsync(IEnumerable<GlamourerDesign> designs, CancellationToken cancellationToken = default)
         => _repository.SaveManyAsync(designs, cancellationToken);
+
+    public IReadOnlyList<BackupEntry> ListBackups(GlamourerDesign design)
+        => _repository.ListBackups(design);
+
+    public Task<DesignSaveResult> RestoreBackupAsync(GlamourerDesign design, string backupPath, CancellationToken cancellationToken = default)
+        => _repository.RestoreBackupAsync(design, backupPath, cancellationToken);
+
+    /// <summary> Applies a find-and-replace rename across every target design in memory. Returns the identifiers of designs that actually changed. </summary>
+    public IReadOnlyList<string> ApplyRenamePattern(IEnumerable<GlamourerDesign> targets, RenamePattern pattern)
+    {
+        var changed = new List<string>();
+        foreach (var design in targets)
+        {
+            if (design.TryApplyRename(pattern))
+                changed.Add(design.Identifier);
+        }
+
+        return changed;
+    }
 }

@@ -57,4 +57,52 @@ public class BackupServiceTests : IDisposable
 
         Assert.Throws<FileNotFoundException>(() => new BackupService().CreateBackup(missingFile));
     }
+
+    [Fact]
+    public void ListBackupsReturnsEmptyWhenNoneExist()
+    {
+        var sourceFile = Path.Combine(_tempDirectory, "design.json");
+        File.WriteAllText(sourceFile, "{}");
+
+        var backups = new BackupService().ListBackups(sourceFile);
+
+        Assert.Empty(backups);
+    }
+
+    [Fact]
+    public void ListBackupsReturnsEveryBackupNewestFirst()
+    {
+        var sourceFile = Path.Combine(_tempDirectory, "design.json");
+        var service = new BackupService();
+
+        File.WriteAllText(sourceFile, "{\"Name\":\"V1\"}");
+        var first = service.CreateBackup(sourceFile);
+        File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddMinutes(-10));
+
+        File.WriteAllText(sourceFile, "{\"Name\":\"V2\"}");
+        var second = service.CreateBackup(sourceFile);
+
+        var backups = service.ListBackups(sourceFile);
+
+        Assert.Equal(2, backups.Count);
+        Assert.Equal(second, backups[0].FilePath);
+        Assert.Equal(first, backups[1].FilePath);
+    }
+
+    [Fact]
+    public void ListBackupsDoesNotMatchAnotherDesignWithASimilarName()
+    {
+        var sourceFile = Path.Combine(_tempDirectory, "design.json");
+        var otherFile = Path.Combine(_tempDirectory, "design-other.json");
+        var service = new BackupService();
+
+        File.WriteAllText(sourceFile, "{}");
+        File.WriteAllText(otherFile, "{}");
+        service.CreateBackup(sourceFile);
+        service.CreateBackup(otherFile);
+
+        var backups = service.ListBackups(sourceFile);
+
+        Assert.Single(backups);
+    }
 }

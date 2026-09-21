@@ -1,6 +1,8 @@
+using DesignBulkEditor.Core.Models;
+
 namespace DesignBulkEditor.Core.Services;
 
-/// <summary> Creates a timestamped copy of a design file before it gets overwritten. </summary>
+/// <summary> Creates a timestamped copy of a design file before it gets overwritten, and lists/restores them. </summary>
 public sealed class BackupService
 {
     private const string BackupFolderName = ".backups";
@@ -31,5 +33,27 @@ public sealed class BackupService
 
         File.Copy(sourceFile, backupPath, overwrite: false);
         return backupPath;
+    }
+
+    /// <summary> All backups previously taken of <paramref name="sourceFile"/>, newest first. </summary>
+    public IReadOnlyList<BackupEntry> ListBackups(string sourceFile)
+    {
+        var directory = Path.GetDirectoryName(sourceFile);
+        if (string.IsNullOrEmpty(directory))
+            return [];
+
+        var backupRoot = Path.Combine(directory, BackupFolderName);
+        if (!Directory.Exists(backupRoot))
+            return [];
+
+        var nameWithoutExtension = Path.GetFileNameWithoutExtension(sourceFile);
+        var extension = Path.GetExtension(sourceFile);
+        var searchPattern = $"{nameWithoutExtension}.*{extension}";
+
+        var entries = new List<BackupEntry>();
+        foreach (var file in Directory.EnumerateFiles(backupRoot, searchPattern, SearchOption.AllDirectories))
+            entries.Add(new BackupEntry(file, File.GetLastWriteTimeUtc(file)));
+
+        return entries.OrderByDescending(e => e.TimestampUtc).ToList();
     }
 }

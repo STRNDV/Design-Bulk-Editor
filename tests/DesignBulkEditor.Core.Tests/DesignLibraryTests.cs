@@ -226,4 +226,19 @@ public class DesignLibraryTests : IDisposable
         var reloadedDesign = Assert.Single(secondLoad.Designs);
         Assert.Equal("Manually Chosen Character", reloadedDesign.AssignedCharacter);
     }
+
+    [Fact]
+    public void ApplyRenamePatternRenamesMatchingTargetsAndReportsWhichChanged()
+    {
+        var matching = CreateInMemoryDesign("(Aeryn Vale) Casual");
+        var nonMatching = CreateInMemoryDesign("(Bryn Solari) Casual");
+
+        var changed = _library.ApplyRenamePattern(
+            [matching, nonMatching],
+            new RenamePattern("Aeryn Vale", "Corin Ashfell", RenameTarget.CharacterName));
+
+        Assert.Single(changed, matching.Identifier);
+        Assert.Equal("Corin Ashfell", matching.CharacterName);
+        Assert.Equal("Bryn Solari", nonMatching.CharacterName);
+    }
 }

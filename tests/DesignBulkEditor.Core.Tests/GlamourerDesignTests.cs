@@ -162,4 +162,88 @@ public class GlamourerDesignTests
 
         Assert.False(snapshot.ContainsKey("FileSystemFolder"));
     }
+
+    [Fact]
+    public void GetPendingDiffsIsEmptyRightAfterLoad()
+    {
+        var design = CreateDesign();
+
+        Assert.Empty(design.GetPendingDiffs());
+    }
+
+    [Fact]
+    public void GetPendingDiffsReportsRenameAndPropertyEditsByPath()
+    {
+        var design = CreateDesign();
+
+        design.CharacterName = "Bryn Solari";
+        design.TrySetPropertyValue("Customize", "Hairstyle", "Value", "42", out _);
+
+        var diffs = design.GetPendingDiffs();
+
+        var nameDiff = Assert.Single(diffs, d => d.Path == "Name");
+        Assert.Equal("\"(Aeryn Vale) Casual\"", nameDiff.OldValue);
+        Assert.Equal("\"(Bryn Solari) Casual\"", nameDiff.NewValue);
+
+        var hairstyleDiff = Assert.Single(diffs, d => d.Path == "Customize/Hairstyle/Value");
+        Assert.Equal("5", hairstyleDiff.OldValue);
+        Assert.Equal("42", hairstyleDiff.NewValue);
+    }
+
+    [Fact]
+    public void GetPendingDiffsReflectsDiscardedChanges()
+    {
+        var design = CreateDesign();
+        design.TrySetPropertyValue("Customize", "Hairstyle", "Value", "42", out _);
+        Assert.NotEmpty(design.GetPendingDiffs());
+
+        design.DiscardChanges();
+
+        Assert.Empty(design.GetPendingDiffs());
+    }
+
+    [Theory]
+    [InlineData("Vale", "Ridge", RenameTarget.CharacterName, "(Aeryn Ridge) Casual")]
+    [InlineData("Casual", "Formal", RenameTarget.BaseName, "(Aeryn Vale) Formal")]
+    public void TryApplyRenameReplacesOnlyTheTargetedField(string find, string replace, RenameTarget target, string expectedName)
+    {
+        var design = CreateDesign("(Aeryn Vale) Casual");
+
+        var changed = design.TryApplyRename(new RenamePattern(find, replace, target));
+
+        Assert.True(changed);
+        Assert.Equal(expectedName, design.ReconstructedName);
+    }
+
+    [Fact]
+    public void TryApplyRenameIsCaseInsensitiveByDefault()
+    {
+        var design = CreateDesign("(Aeryn Vale) Casual");
+
+        var changed = design.TryApplyRename(new RenamePattern("aeryn", "Bryn", RenameTarget.CharacterName));
+
+        Assert.True(changed);
+        Assert.Equal("Bryn Vale", design.CharacterName);
+    }
+
+    [Fact]
+    public void TryApplyRenameCaseSensitiveSkipsNonMatchingCase()
+    {
+        var design = CreateDesign("(Aeryn Vale) Casual");
+
+        var changed = design.TryApplyRename(new RenamePattern("aeryn", "Bryn", RenameTarget.CharacterName, CaseSensitive: true));
+
+        Assert.False(changed);
+        Assert.Equal("Aeryn Vale", design.CharacterName);
+    }
+
+    [Fact]
+    public void TryApplyRenameReturnsFalseWhenFindTextIsNotPresent()
+    {
+        var design = CreateDesign("(Aeryn Vale) Casual");
+
+        var changed = design.TryApplyRename(new RenamePattern("NoMatch", "X", RenameTarget.Both));
+
+        Assert.False(changed);
+    }
 }

@@ -102,4 +102,47 @@ public class DesignRepositoryTests : IDisposable
         Assert.False(goodDesignOne.HasPendingChanges);
         Assert.False(goodDesignTwo.HasPendingChanges);
     }
+
+    [Fact]
+    public async Task RestoreBackupAsyncWritesTheBackupsContentBackToTheDesignFile()
+    {
+        var design = WriteAndLoadDesign("a.json", "(Aeryn Vale) Original");
+
+        design.CharacterName = "Someone Else";
+        await _repository.SaveAsync(design);
+        var backup = Assert.Single(_repository.ListBackups(design));
+
+        var result = await _repository.RestoreBackupAsync(design, backup.FilePath);
+
+        Assert.True(result.Success);
+        Assert.Equal("(Aeryn Vale) Original", design.CurrentName);
+        var onDisk = (JsonObject)JsonNode.Parse(await File.ReadAllTextAsync(design.SourceFile))!;
+        Assert.Equal("(Aeryn Vale) Original", onDisk["Name"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task RestoreBackupAsyncItselfCreatesABackupOfThePreRestoreState()
+    {
+        var design = WriteAndLoadDesign("a.json", "(Aeryn Vale) Original");
+
+        design.CharacterName = "Someone Else";
+        await _repository.SaveAsync(design);
+        var backupOfOriginal = Assert.Single(_repository.ListBackups(design));
+
+        await _repository.RestoreBackupAsync(design, backupOfOriginal.FilePath);
+
+        // Restoring is itself a save, so it must have backed up the "Someone Else" state too.
+        Assert.Equal(2, _repository.ListBackups(design).Count);
+    }
+
+    [Fact]
+    public async Task RestoreBackupAsyncFailsGracefullyForAMissingBackupFile()
+    {
+        var design = WriteAndLoadDesign("a.json");
+
+        var result = await _repository.RestoreBackupAsync(design, Path.Combine(_tempDirectory, "does-not-exist.json"));
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.ErrorMessage);
+    }
 }

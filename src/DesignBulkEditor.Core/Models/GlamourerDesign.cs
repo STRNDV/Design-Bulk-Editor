@@ -157,6 +157,62 @@ public sealed class GlamourerDesign
         _working = (JsonObject)writtenSnapshot.DeepClone();
     }
 
+    /// <summary> Replaces the working copy wholesale (e.g. with a backup's content) without touching the on-disk baseline until it is actually saved. </summary>
+    internal void ReplaceWorkingState(JsonObject newState)
+    {
+        _working = (JsonObject)newState.DeepClone();
+        (_characterName, _baseName) = SplitName(ReadString(_working, "Name") ?? string.Empty);
+        _fileSystemFolder = ReadString(_working, "FileSystemFolder") ?? string.Empty;
+        SortOrderName = ReadString(_working, "SortOrderName");
+    }
+
+    /// <summary> Applies a find-and-replace rule to the character and/or base name. Purely in-memory. Returns whether anything actually changed. </summary>
+    public bool TryApplyRename(RenamePattern pattern)
+    {
+        var comparison = pattern.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var changed = false;
+
+        if (pattern.Target is RenameTarget.CharacterName or RenameTarget.Both && _characterName.Contains(pattern.Find, comparison))
+        {
+            _characterName = _characterName.Replace(pattern.Find, pattern.Replace, comparison);
+            changed = true;
+        }
+
+        if (pattern.Target is RenameTarget.BaseName or RenameTarget.Both && _baseName.Contains(pattern.Find, comparison))
+        {
+            _baseName = _baseName.Replace(pattern.Find, pattern.Replace, comparison);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary> Every value that differs between the on-disk baseline and the current working copy, for review before saving. </summary>
+    public IReadOnlyList<PropertyDiff> GetPendingDiffs()
+    {
+        var diffs = new List<PropertyDiff>();
+        DiffObjects(_baseline, BuildWorkingSnapshot(), string.Empty, diffs);
+        return diffs;
+    }
+
+    private static void DiffObjects(JsonObject? before, JsonObject? after, string path, List<PropertyDiff> diffs)
+    {
+        var keys = (before?.Select(kv => kv.Key) ?? Enumerable.Empty<string>())
+            .Union(after?.Select(kv => kv.Key) ?? Enumerable.Empty<string>(), StringComparer.Ordinal);
+
+        foreach (var key in keys)
+        {
+            var beforeNode = before?[key];
+            var afterNode = after?[key];
+            var currentPath = path.Length == 0 ? key : $"{path}/{key}";
+
+            if (beforeNode is JsonObject beforeObj && afterNode is JsonObject afterObj)
+                DiffObjects(beforeObj, afterObj, currentPath, diffs);
+            else if (!JsonNode.DeepEquals(beforeNode, afterNode))
+                diffs.Add(new PropertyDiff(currentPath, beforeNode?.ToJsonString(), afterNode?.ToJsonString()));
+        }
+    }
+
     private static JsonObject? GetSection(JsonObject document, string sectionName)
         => document[sectionName] as JsonObject;
 

@@ -84,4 +84,30 @@ public sealed class DesignRepository
 
         return results;
     }
+
+    /// <summary> All backups previously taken of this design, newest first. </summary>
+    public IReadOnlyList<BackupEntry> ListBackups(GlamourerDesign design)
+        => _backupService.ListBackups(design.SourceFile);
+
+    /// <summary>
+    /// Restores a design from one of its own backups. This goes through the normal
+    /// save path, so it takes a fresh backup of whatever was on disk before restoring
+    /// and writes atomically - restoring is itself safely undoable.
+    /// </summary>
+    public async Task<DesignSaveResult> RestoreBackupAsync(GlamourerDesign design, string backupPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var stream = File.OpenRead(backupPath);
+            if (await JsonNode.ParseAsync(stream, cancellationToken: cancellationToken) is not JsonObject restored)
+                return DesignSaveResult.Failed(design.SourceFile, "Backup file is not a valid design.");
+
+            design.ReplaceWorkingState(restored);
+            return await SaveAsync(design, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return DesignSaveResult.Failed(design.SourceFile, ex.Message);
+        }
+    }
 }
