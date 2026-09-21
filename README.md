@@ -1,6 +1,6 @@
-# Glamourer Bulk Editor
+# Design Bulk Editor
 
-[![Build](https://github.com/demkadse/glamourer-bulk-editor/actions/workflows/build.yml/badge.svg)](https://github.com/demkadse/glamourer-bulk-editor/actions/workflows/build.yml)
+[![Build](https://github.com/demkadse/design-bulk-editor/actions/workflows/build.yml/badge.svg)](https://github.com/demkadse/design-bulk-editor/actions/workflows/build.yml)
 
 A Dalamud plugin for bulk-editing your [Glamourer](https://github.com/Ottermandias/Glamourer)
 design library - rename designs, reorganise folders, and change a property
@@ -89,14 +89,14 @@ always takes priority over the heuristics above from then on.
 
 ```
 src/
-  GlamourerBulkEditor.Core/    Plain .NET library: design model, file I/O with
+  DesignBulkEditor.Core/    Plain .NET library: design model, file I/O with
                                backup + atomic writes, character-assignment
                                logic. No Dalamud or ImGui dependency - fully
                                unit-testable without the game.
-  GlamourerBulkEditor.Plugin/  The Dalamud plugin itself: ImGui UI and the
+  DesignBulkEditor.Plugin/  The Dalamud plugin itself: ImGui UI and the
                                Glamourer.Api integration.
 tests/
-  GlamourerBulkEditor.Core.Tests/   xUnit tests for everything in Core.
+  DesignBulkEditor.Core.Tests/   xUnit tests for everything in Core.
 ```
 
 ## Glamourer.Api integration
@@ -125,13 +125,13 @@ the Plugin project; `Dalamud.NET.Sdk` resolves it automatically from the
 standard XIVLauncher addon path.
 
 ```bash
-dotnet build src/GlamourerBulkEditor.Core/GlamourerBulkEditor.Core.csproj
-dotnet test tests/GlamourerBulkEditor.Core.Tests/GlamourerBulkEditor.Core.Tests.csproj
+dotnet build src/DesignBulkEditor.Core/DesignBulkEditor.Core.csproj
+dotnet test tests/DesignBulkEditor.Core.Tests/DesignBulkEditor.Core.Tests.csproj
 
 # Build the Plugin through the solution (or with -p:Platform=x64), not the
 # bare .csproj alone: the solution pins the Plugin project to the x64
 # platform Dalamud actually loads, which changes the output folder below.
-dotnet build GlamourerBulkEditor.slnx
+dotnet build DesignBulkEditor.slnx
 ```
 
 CI only builds and tests `Core` (see [`.github/workflows/build.yml`](.github/workflows/build.yml))
@@ -146,10 +146,10 @@ Dalamud's dev-plugin loader wants.
 
 1. Build via the solution as shown above (Debug is fine for local testing).
 2. In-game, open the Dalamud settings (`/xlsettings`) → Experimental → add
-   `src/GlamourerBulkEditor.Plugin/bin/x64/Debug/GlamourerBulkEditor.json`
+   `src/DesignBulkEditor.Plugin/bin/x64/Debug/DesignBulkEditor.json`
    under Dev Plugin Locations.
 3. Enable it from the plugin installer's "Dev Tools" tab.
-4. Open it with `/glamourerbulk`.
+4. Open it with `/designbulk`.
 
 ## Status
 

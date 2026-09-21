@@ -26,7 +26,7 @@ jobs:
       # here. The Plugin project is verified by the manual in-game smoke
       # test described in the README instead.
       - name: Build Core
-        run: dotnet build src/GlamourerBulkEditor.Core/GlamourerBulkEditor.Core.csproj --configuration Release
+        run: dotnet build src/DesignBulkEditor.Core/DesignBulkEditor.Core.csproj --configuration Release
 
       - name: Test Core
-        run: dotnet test tests/GlamourerBulkEditor.Core.Tests/GlamourerBulkEditor.Core.Tests.csproj --configuration Release
+        run: dotnet test tests/DesignBulkEditor.Core.Tests/DesignBulkEditor.Core.Tests.csproj --configuration Release

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DesignBulkEditor.Core/DesignBulkEditor.Core.csproj" />
+    <Project Path="src/DesignBulkEditor.Plugin/DesignBulkEditor.Plugin.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DesignBulkEditor.Core.Tests/DesignBulkEditor.Core.Tests.csproj" />
+  </Folder>
+</Solution>

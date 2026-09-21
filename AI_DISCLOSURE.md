@@ -13,9 +13,9 @@ your game.
 ## What that means in practice
 
 - **Review the code yourself, or have someone you trust review it**,
-  especially [`DesignRepository.cs`](src/GlamourerBulkEditor.Core/Services/DesignRepository.cs)
+  especially [`DesignRepository.cs`](src/DesignBulkEditor.Core/Services/DesignRepository.cs)
   (the part that writes to your actual design files) and
-  [`GlamourerApiClient.cs`](src/GlamourerBulkEditor.Plugin/GlamourerApiClient.cs)
+  [`GlamourerApiClient.cs`](src/DesignBulkEditor.Plugin/GlamourerApiClient.cs)
   (the part that talks to Glamourer's live IPC). These are the two places a
   bug could actually cost you data or misbehave in-game.
 - **Automated tests exist and are meant to be trusted more than the prose.**
