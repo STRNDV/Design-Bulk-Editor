@@ -3,7 +3,7 @@
     "Author": "STRNDV",
     "Name": "Design Bulk Editor",
     "InternalName": "DesignBulkEditor",
-    "AssemblyVersion": "0.1.1.0",
+    "AssemblyVersion": "0.1.2.0",
     "Description": "Group Glamourer designs by character, edit names/folders/properties across many designs at once, and preview a staged edit on your logged-in character before saving. Unofficial, community-built, not affiliated with Glamourer/Ottermandias.",
     "Punchline": "Bulk-edit your Glamourer design library and preview changes live, without leaving the game.",
     "ApplicableVersion": "any",
