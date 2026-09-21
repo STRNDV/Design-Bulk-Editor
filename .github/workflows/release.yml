@@ -1,0 +1,46 @@
+name: Release
+
+# Triggered by pushing a tag like "v0.1.0". Builds the plugin against a real
+# Dalamud install (CI has none by default, so one is installed first - the
+# exact same standard XIVLauncher path Dalamud.NET.Sdk already looks for
+# locally, verified by building this project that way), then publishes the
+# packaged latest.zip as a GitHub Release asset. repo.json's DownloadLink*
+# fields point at .../releases/latest/download/latest.zip, so they always
+# resolve to whatever this workflow most recently published - no need to
+# edit repo.json's links on every release, only its AssemblyVersion.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile dalamud-latest.zip
+          Expand-Archive -Force dalamud-latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev\"
+
+      - name: Build Release
+        run: dotnet build DesignBulkEditor.slnx --configuration Release
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "src/DesignBulkEditor.Plugin/bin/x64/Release/DesignBulkEditor/latest.zip" `
+            --title "${{ github.ref_name }}" `
+            --generate-notes

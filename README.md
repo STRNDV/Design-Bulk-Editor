@@ -151,11 +151,33 @@ CI only builds and tests `Core` (see [`.github/workflows/build.yml`](.github/wor
 since a clean CI runner has no local Dalamud install to compile the Plugin
 project against. The Plugin is verified manually - see below.
 
-## Installing as a dev plugin
+## Installing
 
-Every build already produces a loose, loadable plugin manifest next to the
-DLL - a Release build additionally zips it up, but the loose files are what
-Dalamud's dev-plugin loader wants.
+There are two different, unrelated ways to install this plugin - pick one:
+
+### As a regular user, via the custom plugin repository
+
+This is the normal install path, the same mechanism Penumbra/Glamourer/etc.
+use: a `repo.json` file hosted in this repo, that you point Dalamud at.
+
+1. In-game, open the Dalamud settings (`/xlsettings`) → Experimental →
+   Custom Plugin Repositories, and add:
+   `https://raw.githubusercontent.com/STRNDV/Design-Bulk-Editor/main/repo.json`
+2. Install "Design Bulk Editor" from the plugin installer like any other
+   plugin, and update it the same way too.
+
+`repo.json` lives in this repo and points at the `latest.zip` asset of this
+repo's most recent GitHub Release (built by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) whenever a
+`v*` tag is pushed) - it is a small, separate JSON file, not the build
+output described below, and it's the only thing that needs a public URL at
+all.
+
+### As a developer, via a local dev-plugin build
+
+For working on the plugin itself. Every build already produces a loose,
+loadable plugin manifest next to the DLL on your own machine - nothing here
+is uploaded anywhere.
 
 1. Build via the solution as shown above (Debug is fine for local testing).
    This produces `DesignBulkEditor.json` under
@@ -164,6 +186,19 @@ Dalamud's dev-plugin loader wants.
    that file's path under Dev Plugin Locations.
 3. Enable it from the plugin installer's "Dev Tools" tab.
 4. Open it with `/designbulk`.
+
+## Releasing
+
+1. Bump `<Version>` in
+   [`src/DesignBulkEditor.Plugin/DesignBulkEditor.Plugin.csproj`](src/DesignBulkEditor.Plugin/DesignBulkEditor.Plugin.csproj)
+   and `AssemblyVersion` in [`repo.json`](repo.json) to match (Dalamud
+   compares this to decide whether an update is available - the two must
+   agree).
+2. Commit, then push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
+3. The release workflow builds against a freshly installed Dalamud and
+   publishes `latest.zip` to a GitHub Release matching the tag.
+   `repo.json`'s download links always point at the latest release, so they
+   don't need to change.
 
 ## Status
 
