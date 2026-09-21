@@ -127,7 +127,11 @@ standard XIVLauncher addon path.
 ```bash
 dotnet build src/GlamourerBulkEditor.Core/GlamourerBulkEditor.Core.csproj
 dotnet test tests/GlamourerBulkEditor.Core.Tests/GlamourerBulkEditor.Core.Tests.csproj
-dotnet build src/GlamourerBulkEditor.Plugin/GlamourerBulkEditor.Plugin.csproj
+
+# Build the Plugin through the solution (or with -p:Platform=x64), not the
+# bare .csproj alone: the solution pins the Plugin project to the x64
+# platform Dalamud actually loads, which changes the output folder below.
+dotnet build GlamourerBulkEditor.slnx
 ```
 
 CI only builds and tests `Core` (see [`.github/workflows/build.yml`](.github/workflows/build.yml))
@@ -136,9 +140,13 @@ project against. The Plugin is verified manually - see below.
 
 ## Installing as a dev plugin
 
-1. Build the Plugin project in Release configuration.
+Every build already produces a loose, loadable plugin manifest next to the
+DLL - a Release build additionally zips it up, but the loose files are what
+Dalamud's dev-plugin loader wants.
+
+1. Build via the solution as shown above (Debug is fine for local testing).
 2. In-game, open the Dalamud settings (`/xlsettings`) → Experimental → add
-   `src/GlamourerBulkEditor.Plugin/bin/x64/Release/GlamourerBulkEditor.json`
+   `src/GlamourerBulkEditor.Plugin/bin/x64/Debug/GlamourerBulkEditor.json`
    under Dev Plugin Locations.
 3. Enable it from the plugin installer's "Dev Tools" tab.
 4. Open it with `/glamourerbulk`.
