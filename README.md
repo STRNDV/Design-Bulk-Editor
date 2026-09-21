@@ -159,8 +159,10 @@ Dalamud's dev-plugin loader wants.
 
 1. Build via the solution as shown above (Debug is fine for local testing).
 2. In-game, open the Dalamud settings (`/xlsettings`) → Experimental → add
-   `src/DesignBulkEditor.Plugin/bin/x64/Debug/DesignBulkEditor.json`
-   under Dev Plugin Locations.
+   the **full local path** to `DesignBulkEditor.json` under Dev Plugin
+   Locations - this is a path on your own PC, not a URL. It's
+   `<your clone>\src\DesignBulkEditor.Plugin\bin\x64\Debug\DesignBulkEditor.json`
+   (shown here relative to the repo root; Dalamud needs the absolute path).
 3. Enable it from the plugin installer's "Dev Tools" tab.
 4. Open it with `/designbulk`.
 
