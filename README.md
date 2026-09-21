@@ -162,7 +162,7 @@ use: a `repo.json` file hosted in this repo, that you point Dalamud at.
 
 1. In-game, open the Dalamud settings (`/xlsettings`) → Experimental →
    Custom Plugin Repositories, and add:
-   `https://raw.githubusercontent.com/STRNDV/Design-Bulk-Editor/main/repo.json`
+   `https://raw.githubusercontent.com/STRNDV/Design-Bulk-Editor/master/repo.json`
 2. Install "Design Bulk Editor" from the plugin installer like any other
    plugin, and update it the same way too.
 

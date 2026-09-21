@@ -15,7 +15,7 @@
     <Tags>glamourer;appearance;bulk-edit</Tags>
     <!-- Only resolves once the repo is published under this name/branch; DalamudPackager
          only accepts a remote IconUrl, not a locally bundled file. -->
-    <IconUrl>https://raw.githubusercontent.com/STRNDV/Design-Bulk-Editor/main/images/icon.png</IconUrl>
+    <IconUrl>https://raw.githubusercontent.com/STRNDV/Design-Bulk-Editor/master/images/icon.png</IconUrl>
   </PropertyGroup>
 
   <ItemGroup>
