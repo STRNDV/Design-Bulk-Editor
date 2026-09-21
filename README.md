@@ -72,12 +72,24 @@ below.
 | Which designs get edited | Not applicable (single design at a time) | One selection: a checkbox adds a design without disturbing the rest, clicking a name selects just that one, Ctrl+click adds/removes - every action (stage, apply, save, discard) always acts on exactly this selection, so a design you edited earlier can never silently drop out of it |
 | "Did I actually save that?" | Not applicable | A library-wide summary always shows how many designs have unsaved edits, independent of what's currently selected, with a one-click way to select exactly those |
 
-Note the distinction between **selecting** designs (what gets edited/saved) and the
-**primary** design (whichever you selected most recently) - the primary is only
-used to browse which Section/Entry/Property options are available to stage,
-and for the inherently single-design actions (rename, character assignment,
-backups, share code). Staging, applying, reviewing, saving, and batch rename
-all act on the *whole selection*, not just the primary.
+The window itself is a guided flow rather than one flat screen you have to
+puzzle through:
+
+- **Bulk Edit** tab: **1. Select** the designs you want (checkbox to add
+  without losing the rest, click a name to select only that one, Ctrl+click
+  to add/remove) → **2. Edit** (stage property edits or set up a batch
+  rename, applied only to your selection) → **3. Review & Save** (a diff of
+  every pending change, nothing written until you confirm). Each step only
+  shows what's relevant to it.
+- **Single Design Tools** tab: rename, character assignment, live preview,
+  backups, and share-code export/import - everything that only ever makes
+  sense for one design at a time - lives here, separately, so it never
+  clutters the bulk-edit flow.
+
+A library-wide "N designs have unsaved edits" summary is always visible
+regardless of which tab or step you're on, with a one-click way to select
+exactly those and jump straight to Edit - so nothing edited earlier can go
+quietly forgotten.
 
 ## Character assignment
 
