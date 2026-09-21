@@ -1,0 +1,26 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>GlamourerBulkEditor</AssemblyName>
+    <RootNamespace>GlamourerBulkEditor.Plugin</RootNamespace>
+    <Version>0.1.0</Version>
+    <Name>Glamourer Bulk Editor</Name>
+    <Author>Dennis</Author>
+    <Punchline>Bulk-edit your Glamourer design library and preview changes live, without leaving the game.</Punchline>
+    <Description>Group Glamourer designs by character, edit names/folders/properties across many designs at once, and preview a staged edit on your logged-in character before saving. Unofficial, community-built, not affiliated with Glamourer/Ottermandias.</Description>
+    <RepoUrl>https://github.com/demkadse/glamourer-bulk-editor</RepoUrl>
+    <Tags>glamourer;appearance;bulk-edit</Tags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GlamourerBulkEditor.Core\GlamourerBulkEditor.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Glamourer.Api" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

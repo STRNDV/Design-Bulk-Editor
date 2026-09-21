@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Dalamud dev-plugin local install artifacts, never meant to be committed
+**/bin/x64/

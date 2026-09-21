@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      # The Plugin project needs a local Dalamud install to compile against
+      # (Dalamud.NET.Sdk resolves it from the standard XIVLauncher addon
+      # path). CI has no game installed, so only the platform- and
+      # game-independent parts - Core and its test suite - build and run
+      # here. The Plugin project is verified by the manual in-game smoke
+      # test described in the README instead.
+      - name: Build Core
+        run: dotnet build src/GlamourerBulkEditor.Core/GlamourerBulkEditor.Core.csproj --configuration Release
+
+      - name: Test Core
+        run: dotnet test tests/GlamourerBulkEditor.Core.Tests/GlamourerBulkEditor.Core.Tests.csproj --configuration Release
