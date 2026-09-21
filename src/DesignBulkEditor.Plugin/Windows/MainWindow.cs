@@ -9,15 +9,25 @@ using DesignBulkEditor.Core.Services;
 namespace DesignBulkEditor.Plugin.Windows;
 
 /// <summary>
-/// The plugin's single window. Everything the user does lives entirely in
-/// memory for as long as the window is open - there is no save/reload cycle
-/// anywhere in this flow, which is the direct fix for the old app's core
-/// bug: staged property edits are a persistent list, independent from
-/// whichever design is currently focused, so switching between e.g.
-/// Hairstyle and SkinColor never discards anything. Section/Entry/Property
-/// options are recomputed fresh from the focused design on every single
-/// frame instead of being cached, so there is no stale-reference class of
-/// bug to begin with.
+/// The plugin's single window.
+///
+/// Selection model: there is exactly ONE selection concept, not two. A
+/// checkbox adds/removes a design from the current selection without
+/// disturbing the rest of it (for building up a batch); clicking a design's
+/// name replaces the selection with just that one (for a quick look), and
+/// Ctrl+click adds/removes it without disturbing the rest, same as the
+/// checkbox. Every action ("stage", "apply", "review & save", "discard")
+/// always operates on exactly this one selection - there is no separate,
+/// independently-tracked "focused" design that edits can silently miss.
+/// The one design used to browse available Section/Entry/Property options
+/// for staging is simply the most recently selected one ("primary"),
+/// recomputed fresh every frame from the live design data - never cached.
+///
+/// Every design that has unsaved edits is marked with a trailing "*" in the
+/// list regardless of whether it's currently selected, and a summary line
+/// always shows how many designs across the whole library have unsaved
+/// edits, with a one-click way to select exactly those - so nothing can go
+/// quietly missing between "I edited it" and "I saved it".
 /// </summary>
 public sealed class MainWindow : Window, IDisposable
 {
@@ -34,8 +44,9 @@ public sealed class MainWindow : Window, IDisposable
 
     private CharacterDesignGroup? _selectedGroup;
     private string _searchText = string.Empty;
-    private readonly HashSet<string> _targetedIdentifiers = [];
-    private GlamourerDesign? _focusedDesign;
+
+    private readonly HashSet<string> _selectedIdentifiers = [];
+    private string? _primaryIdentifier;
 
     private readonly List<PendingPropertyEdit> _stagedEdits = [];
     private int _newEditSectionIndex;
@@ -63,7 +74,7 @@ public sealed class MainWindow : Window, IDisposable
 
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(820, 560),
+            MinimumSize = new Vector2(860, 600),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
         };
     }
@@ -71,6 +82,12 @@ public sealed class MainWindow : Window, IDisposable
     public void Dispose()
     {
     }
+
+    private GlamourerDesign? PrimaryDesign
+        => _snapshot?.Designs.FirstOrDefault(d => d.Identifier == _primaryIdentifier);
+
+    private IReadOnlyList<GlamourerDesign> SelectedDesigns()
+        => _snapshot is null ? [] : _snapshot.Designs.Where(d => _selectedIdentifiers.Contains(d.Identifier)).ToList();
 
     public override void Draw()
     {
@@ -86,6 +103,9 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
+        DrawPendingChangesSummary();
+        ImGui.Separator();
+
         var contentHeight = ImGui.GetContentRegionAvail().Y;
 
         ImGui.BeginChild("CharacterList", new Vector2(200, contentHeight), true);
@@ -93,13 +113,13 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndChild();
 
         ImGui.SameLine();
-        ImGui.BeginChild("DesignList", new Vector2(320, contentHeight), true);
+        ImGui.BeginChild("DesignList", new Vector2(340, contentHeight), true);
         DrawDesignList();
         ImGui.EndChild();
 
         ImGui.SameLine();
         ImGui.BeginChild("DesignDetails", Vector2.Zero, true);
-        DrawFocusedDesignPanel();
+        DrawSelectionPanel();
         ImGui.EndChild();
     }
 
@@ -121,6 +141,31 @@ public sealed class MainWindow : Window, IDisposable
 
         if (!string.IsNullOrEmpty(_statusMessage))
             ImGui.TextWrapped(_statusMessage);
+    }
+
+    /// <summary>
+    /// Always-visible, library-wide "what have I not saved yet" summary - independent
+    /// of the current selection, so nothing edited earlier can go quietly forgotten.
+    /// </summary>
+    private void DrawPendingChangesSummary()
+    {
+        var pending = _snapshot!.Designs.Where(d => d.HasPendingChanges).ToList();
+        if (pending.Count == 0)
+        {
+            ImGui.TextDisabled("No unsaved edits anywhere in the loaded library.");
+            return;
+        }
+
+        ImGui.TextColored(new Vector4(0.95f, 0.75f, 0.2f, 1f),
+            $"{pending.Count} design(s) in the library have unsaved edits (marked with * below).");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Select all unsaved"))
+        {
+            _selectedIdentifiers.Clear();
+            foreach (var d in pending)
+                _selectedIdentifiers.Add(d.Identifier);
+            _primaryIdentifier = pending[0].Identifier;
+        }
     }
 
     private void BrowseForConfigDirectory()
@@ -170,6 +215,7 @@ public sealed class MainWindow : Window, IDisposable
     private void DrawDesignList()
     {
         ImGui.TextDisabled("Designs");
+        ImGui.TextDisabled("Checkbox adds to selection. Click a name to select only it (Ctrl+click to add/remove).");
         ImGui.Separator();
 
         ImGui.SetNextItemWidth(-1);
@@ -177,27 +223,30 @@ public sealed class MainWindow : Window, IDisposable
 
         var visible = VisibleDesigns().ToList();
 
-        if (ImGui.SmallButton("Target all visible"))
+        if (ImGui.SmallButton("Select all visible"))
             foreach (var d in visible)
-                _targetedIdentifiers.Add(d.Identifier);
+                SelectAdditionally(d);
         ImGui.SameLine();
-        if (ImGui.SmallButton("Clear targets"))
-            _targetedIdentifiers.Clear();
+        if (ImGui.SmallButton("Clear selection"))
+        {
+            _selectedIdentifiers.Clear();
+            _primaryIdentifier = null;
+        }
 
-        ImGui.Text($"{_targetedIdentifiers.Count} design(s) targeted");
+        ImGui.Text($"{_selectedIdentifiers.Count} design(s) selected");
         ImGui.Separator();
 
         foreach (var design in visible)
         {
             ImGui.PushID(design.Identifier);
 
-            var isTargeted = _targetedIdentifiers.Contains(design.Identifier);
-            if (ImGui.Checkbox("##target", ref isTargeted))
+            var isSelected = _selectedIdentifiers.Contains(design.Identifier);
+            if (ImGui.Checkbox("##select", ref isSelected))
             {
-                if (isTargeted)
-                    _targetedIdentifiers.Add(design.Identifier);
+                if (isSelected)
+                    SelectAdditionally(design);
                 else
-                    _targetedIdentifiers.Remove(design.Identifier);
+                    Deselect(design);
             }
 
             ImGui.SameLine();
@@ -205,72 +254,119 @@ public sealed class MainWindow : Window, IDisposable
             if (design.HasPendingChanges)
                 label += " *";
 
-            if (ImGui.Selectable(label, ReferenceEquals(_focusedDesign, design)))
-                FocusDesign(design);
+            if (ImGui.Selectable(label, isSelected))
+            {
+                if (ImGui.GetIO().KeyCtrl)
+                {
+                    if (_selectedIdentifiers.Contains(design.Identifier))
+                        Deselect(design);
+                    else
+                        SelectAdditionally(design);
+                }
+                else
+                {
+                    SelectOnly(design);
+                }
+            }
 
             ImGui.PopID();
         }
     }
 
-    private void FocusDesign(GlamourerDesign design)
+    private void SelectOnly(GlamourerDesign design)
     {
-        _focusedDesign = design;
-        _manualCharacterAssignment = design.AssignedCharacter ?? string.Empty;
+        _selectedIdentifiers.Clear();
+        _selectedIdentifiers.Add(design.Identifier);
+        _primaryIdentifier = design.Identifier;
+        ResetStagingInputs();
+    }
+
+    private void SelectAdditionally(GlamourerDesign design)
+    {
+        _selectedIdentifiers.Add(design.Identifier);
+        _primaryIdentifier ??= design.Identifier;
+    }
+
+    private void Deselect(GlamourerDesign design)
+    {
+        _selectedIdentifiers.Remove(design.Identifier);
+        if (_primaryIdentifier == design.Identifier)
+        {
+            _primaryIdentifier = _selectedIdentifiers.FirstOrDefault();
+            ResetStagingInputs();
+        }
+    }
+
+    private void ResetStagingInputs()
+    {
         _newEditEntry = null;
         _newEditProperty = null;
         _newEditValue = string.Empty;
+        _manualCharacterAssignment = PrimaryDesign?.AssignedCharacter ?? string.Empty;
     }
 
-    private void DrawFocusedDesignPanel()
+    private void DrawSelectionPanel()
     {
+        var selected = SelectedDesigns();
+        var pendingInSelection = selected.Count(d => d.HasPendingChanges);
+
+        ImGui.TextUnformatted(selected.Count == 0
+            ? "Nothing selected."
+            : $"{selected.Count} design(s) selected" + (pendingInSelection > 0 ? $" - {pendingInSelection} with unsaved edits" : " - all saved"));
+
         DrawBatchRenameSection();
-        DrawStagedEditsSection(_focusedDesign);
+        DrawStagedEditsSection(PrimaryDesign);
 
         ImGui.Spacing();
         ImGui.Separator();
-        ImGui.TextUnformatted("Actions on current targets");
+        ImGui.TextUnformatted("Actions on the selection above");
 
-        if (ImGui.Button("Apply staged edits to targets"))
-            ApplyStagedEditsToTargets();
-        ImGui.SameLine();
-        if (ImGui.Button("Discard changes on targets"))
-            DiscardChangesOnTargets();
-        ImGui.SameLine();
-        if (ImGui.Button("Review & save targets"))
-            OpenReviewModal();
+        var canAct = selected.Count > 0;
+        ImGui.BeginDisabled(!canAct || _stagedEdits.Count == 0);
+        if (ImGui.Button($"1) Apply {_stagedEdits.Count} staged edit(s) to {selected.Count} selected (in memory)"))
+            ApplyStagedEditsToSelection();
+        ImGui.EndDisabled();
 
-        if (_focusedDesign is null)
+        ImGui.BeginDisabled(!canAct || pendingInSelection == 0);
+        if (ImGui.Button("2) Review pending changes && save to disk..."))
+            OpenReviewModal(selected);
+        ImGui.SameLine();
+        if (ImGui.Button("Discard all unsaved edits on selection"))
+            DiscardChangesOnSelection();
+        ImGui.EndDisabled();
+
+        if (!canAct)
         {
             ImGui.Spacing();
-            ImGui.TextWrapped("Select a design from the list to inspect it, edit its name/folder, review its backups, or export/import a share code.");
+            ImGui.TextWrapped("Select one or more designs from the list (checkbox, or click a name) to edit them.");
             return;
         }
 
-        var design = _focusedDesign;
+        var primary = PrimaryDesign;
+        if (primary is null)
+            return;
 
         ImGui.Spacing();
         ImGui.Separator();
-        ImGui.TextWrapped($"Focused: {design.ReconstructedName}");
-        ImGui.TextDisabled(design.SourceFile);
-        if (design.HasPendingChanges)
-            ImGui.TextColored(new Vector4(0.95f, 0.75f, 0.2f, 1f), "Unsaved changes");
+        ImGui.TextWrapped($"Primary (used to browse properties above): {primary.ReconstructedName}");
+        ImGui.TextDisabled(primary.SourceFile);
 
-        if (ImGui.CollapsingHeader("Rename", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Rename (primary design only)", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            var characterName = design.CharacterName;
+            var characterName = primary.CharacterName;
             if (ImGui.InputText("Character name", ref characterName, 128))
-                design.CharacterName = characterName;
+                primary.CharacterName = characterName;
 
-            var baseName = design.BaseName;
+            var baseName = primary.BaseName;
             if (ImGui.InputText("Design name", ref baseName, 128))
-                design.BaseName = baseName;
+                primary.BaseName = baseName;
 
-            var folder = design.FileSystemFolder;
+            var folder = primary.FileSystemFolder;
             if (ImGui.InputText("Folder", ref folder, 256))
-                design.FileSystemFolder = folder;
+                primary.FileSystemFolder = folder;
         }
 
-        if (ImGui.CollapsingHeader("Character assignment", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Character assignment (primary design only)"))
         {
             ImGui.TextWrapped("Not every design follows a naming convention Design Bulk Editor can guess. " +
                                "Confirm or correct which character this design belongs to; your choice is remembered.");
@@ -279,25 +375,25 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.InputText("##manualAssignment", ref _manualCharacterAssignment, 128);
             ImGui.SameLine();
             if (ImGui.Button("Assign") && !string.IsNullOrWhiteSpace(_manualCharacterAssignment))
-                _ = AssignCharacterAsync(design, _manualCharacterAssignment);
+                _ = AssignCharacterAsync(primary, _manualCharacterAssignment);
         }
 
-        if (ImGui.CollapsingHeader("Live preview"))
+        if (ImGui.CollapsingHeader("Live preview (primary design only)"))
         {
             if (ImGui.Button("Preview on my character") && _apiClient.IsAvailable)
-                PreviewFocusedDesign();
+                PreviewDesign(primary);
             ImGui.SameLine();
             if (ImGui.Button("Revert preview"))
                 RevertPreview();
         }
 
-        DrawBackupsSection(design);
-        DrawShareCodeSection(design);
+        DrawBackupsSection(primary);
+        DrawShareCodeSection(primary);
     }
 
     private void DrawBatchRenameSection()
     {
-        if (!ImGui.CollapsingHeader("Batch rename targets"))
+        if (!ImGui.CollapsingHeader("Batch rename selected designs"))
             return;
 
         ImGui.SetNextItemWidth(160);
@@ -308,7 +404,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.Combo("Field", ref _renameTargetIndex, RenameTargetLabels, RenameTargetLabels.Length);
         ImGui.Checkbox("Case sensitive", ref _renameCaseSensitive);
 
-        if (ImGui.Button("Apply rename to targets") && !string.IsNullOrEmpty(_renameFind))
+        if (ImGui.Button("Apply rename to selection (in memory)") && !string.IsNullOrEmpty(_renameFind))
             ApplyBatchRename();
     }
 
@@ -317,7 +413,7 @@ public sealed class MainWindow : Window, IDisposable
         if (!ImGui.CollapsingHeader("Staged property edits", ImGuiTreeNodeFlags.DefaultOpen))
             return;
 
-        ImGui.TextWrapped("Stage as many properties as you like - switching between them never discards the others.");
+        ImGui.TextWrapped("Stage as many properties as you like here, then apply them to your whole selection below in one step.");
 
         if (reference is not null)
         {
@@ -369,7 +465,7 @@ public sealed class MainWindow : Window, IDisposable
         }
         else
         {
-            ImGui.TextDisabled("Select a design to browse its properties, or edit staged entries below.");
+            ImGui.TextDisabled("Select a design to browse its properties.");
         }
 
         if (_stagedEdits.Count == 0)
@@ -453,7 +549,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawBackupsSection(GlamourerDesign design)
     {
-        if (!ImGui.CollapsingHeader("Backups"))
+        if (!ImGui.CollapsingHeader("Backups (primary design only)"))
             return;
 
         var backups = _designLibrary.ListBackups(design);
@@ -476,7 +572,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawShareCodeSection(GlamourerDesign design)
     {
-        if (!ImGui.CollapsingHeader("Share code"))
+        if (!ImGui.CollapsingHeader("Share code (primary design only)"))
             return;
 
         if (!_apiClient.IsAvailable)
@@ -526,20 +622,12 @@ public sealed class MainWindow : Window, IDisposable
         _stagedEdits.Add(new PendingPropertyEdit(section, entry, property, value));
     }
 
-    private IReadOnlyList<GlamourerDesign> ResolveTargets()
+    private void ApplyStagedEditsToSelection()
     {
-        if (_targetedIdentifiers.Count == 0)
-            return _focusedDesign is null ? [] : [_focusedDesign];
-
-        return _snapshot!.Designs.Where(d => _targetedIdentifiers.Contains(d.Identifier)).ToList();
-    }
-
-    private void ApplyStagedEditsToTargets()
-    {
-        var targets = ResolveTargets();
+        var targets = SelectedDesigns();
         if (targets.Count == 0 || _stagedEdits.Count == 0)
         {
-            _statusMessage = "Nothing to apply: stage at least one edit and select at least one target.";
+            _statusMessage = "Nothing to apply: stage at least one edit and select at least one design.";
             return;
         }
 
@@ -547,24 +635,24 @@ public sealed class MainWindow : Window, IDisposable
         var failures = outcomes.Where(o => !o.Success).ToList();
 
         _statusMessage = failures.Count == 0
-            ? $"Applied {_stagedEdits.Count} staged edit(s) to {targets.Count} design(s) in memory. Nothing written to disk yet."
+            ? $"Applied {_stagedEdits.Count} staged edit(s) to {targets.Count} design(s) in memory. Not written to disk yet - use \"Review pending changes & save\" next."
             : $"Applied with {failures.Count} failure(s): {string.Join("; ", failures.Select(f => $"{f.SourceFile}: {f.ErrorMessage}"))}";
     }
 
-    private void DiscardChangesOnTargets()
+    private void DiscardChangesOnSelection()
     {
-        foreach (var design in ResolveTargets())
+        foreach (var design in SelectedDesigns())
             design.DiscardChanges();
 
-        _statusMessage = "Reverted all staged edits on the current targets back to what is saved on disk.";
+        _statusMessage = "Reverted all unsaved edits on the selected designs back to what is saved on disk.";
     }
 
     private void ApplyBatchRename()
     {
-        var targets = ResolveTargets();
+        var targets = SelectedDesigns();
         if (targets.Count == 0)
         {
-            _statusMessage = "No targets selected for rename.";
+            _statusMessage = "Select at least one design for rename.";
             return;
         }
 
@@ -573,13 +661,12 @@ public sealed class MainWindow : Window, IDisposable
         var changed = _designLibrary.ApplyRenamePattern(targets, pattern);
 
         _statusMessage = changed.Count == 0
-            ? "No target matched the find text."
-            : $"Renamed {changed.Count} design(s) in memory. Not saved to disk yet.";
+            ? "No selected design matched the find text."
+            : $"Renamed {changed.Count} design(s) in memory. Not written to disk yet - use \"Review pending changes & save\" next.";
     }
 
-    private void OpenReviewModal()
+    private void OpenReviewModal(IReadOnlyList<GlamourerDesign> targets)
     {
-        var targets = ResolveTargets();
         _reviewItems = targets
             .Select(d => (Design: d, Diffs: d.GetPendingDiffs()))
             .Where(t => t.Diffs.Count > 0)
@@ -587,7 +674,7 @@ public sealed class MainWindow : Window, IDisposable
 
         if (_reviewItems.Count == 0)
         {
-            _statusMessage = "No pending changes on the current targets to review.";
+            _statusMessage = "No pending changes on the selection to review.";
             return;
         }
 
@@ -633,15 +720,12 @@ public sealed class MainWindow : Window, IDisposable
         var failures = results.Where(r => !r.Success).ToList();
 
         _statusMessage = failures.Count == 0
-            ? $"Saved {results.Count} design(s), with a backup of each previous version."
+            ? $"Saved {results.Count} design(s) to disk, with a backup of each previous version."
             : $"Saved with {failures.Count} failure(s): {string.Join("; ", failures.Select(f => $"{f.SourceFile}: {f.ErrorMessage}"))}";
     }
 
-    private void PreviewFocusedDesign()
+    private void PreviewDesign(GlamourerDesign design)
     {
-        if (_focusedDesign is null)
-            return;
-
         var objectIndex = Plugin.ObjectTable.LocalPlayer?.ObjectIndex;
         if (objectIndex is null)
         {
@@ -649,7 +733,7 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
-        var result = _apiClient.ApplyPreview(_focusedDesign.BuildWorkingSnapshot(), objectIndex.Value);
+        var result = _apiClient.ApplyPreview(design.BuildWorkingSnapshot(), objectIndex.Value);
         _statusMessage = result.Success
             ? "Preview applied to your character."
             : $"Preview failed: {result.ErrorMessage}";
@@ -687,8 +771,8 @@ public sealed class MainWindow : Window, IDisposable
         {
             var expanded = Environment.ExpandEnvironmentVariables(_configDirectory);
             _snapshot = _designLibrary.LoadAsync(expanded).GetAwaiter().GetResult();
-            _targetedIdentifiers.Clear();
-            _focusedDesign = null;
+            _selectedIdentifiers.Clear();
+            _primaryIdentifier = null;
             _statusMessage = $"Loaded {_snapshot.Designs.Count} design(s) across {_snapshot.Groups.Count} character group(s).";
             _apiClient.Refresh();
         }

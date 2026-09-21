@@ -69,6 +69,15 @@ below.
 | After saving | A modal told you to reload manually; state was inconsistent until you did | Nothing to reload - state lives in memory for as long as the plugin/game session runs |
 | A batch with one bad design | Threw and aborted mid-batch, leaving a mix of saved/unsaved designs | Every design in a batch is attempted; failures are reported per-design |
 | Feedback | None until you saved and reloaded | Live preview on your character via Glamourer's IPC, before saving anything |
+| Which designs get edited | Not applicable (single design at a time) | One selection: a checkbox adds a design without disturbing the rest, clicking a name selects just that one, Ctrl+click adds/removes - every action (stage, apply, save, discard) always acts on exactly this selection, so a design you edited earlier can never silently drop out of it |
+| "Did I actually save that?" | Not applicable | A library-wide summary always shows how many designs have unsaved edits, independent of what's currently selected, with a one-click way to select exactly those |
+
+Note the distinction between **selecting** designs (what gets edited/saved) and the
+**primary** design (whichever you selected most recently) - the primary is only
+used to browse which Section/Entry/Property options are available to stage,
+and for the inherently single-design actions (rename, character assignment,
+backups, share code). Staging, applying, reviewing, saving, and batch rename
+all act on the *whole selection*, not just the primary.
 
 ## Character assignment
 
