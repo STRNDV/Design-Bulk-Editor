@@ -158,13 +158,13 @@ public class DesignLibraryTests : IDisposable
         // Not everyone names designs "(Character) Design" - Glamourer's own Automation
         // config, when present, is a more reliable, explicit signal.
         var designId = WriteDesignFile("a.json", "Plain Outfit Name");
-        WriteAutomationConfig(("Tori Siresa", designId));
+        WriteAutomationConfig(("Automation Character", designId));
 
         var snapshot = await _library.LoadAsync(_tempDirectory);
 
         var design = Assert.Single(snapshot.Designs);
-        Assert.Equal("Tori Siresa", design.AssignedCharacter);
-        Assert.Single(snapshot.Groups, g => g.CharacterName == "Tori Siresa");
+        Assert.Equal("Automation Character", design.AssignedCharacter);
+        Assert.Single(snapshot.Groups, g => g.CharacterName == "Automation Character");
     }
 
     [Fact]

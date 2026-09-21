@@ -33,25 +33,26 @@ public class AutomationConfigReaderTests : IDisposable
     [Fact]
     public async Task ParsesRealisticGlamourerAutomationLayout()
     {
-        // Mirrors the actual shape written by Glamourer 1.7.1.3's Automation feature.
+        // Shape verified against a real Glamourer 1.7.1.3 automation.json (structure only -
+        // the names and GUIDs below are fictional placeholders, not real player data).
         WriteAutomationJson("""
         {
             "Version": 1,
             "Data": [
                 {
-                    "Name": "Tori Siresa",
-                    "Identifier": { "Type": "Player", "PlayerName": "Tori Siresa", "HomeWorld": 67 },
+                    "Name": "Aeryn Vale",
+                    "Identifier": { "Type": "Player", "PlayerName": "Aeryn Vale", "HomeWorld": 67 },
                     "Enabled": true,
                     "Designs": [
-                        { "Design": "8d3a7aba-1c05-48c7-a758-90726dd5abe8", "Type": 31, "Conditions": { "JobGroup": 1 } }
+                        { "Design": "11111111-1111-1111-1111-111111111111", "Type": 31, "Conditions": { "JobGroup": 1 } }
                     ]
                 },
                 {
-                    "Name": "Asta Camoa",
-                    "Identifier": { "Type": "Player", "PlayerName": "Asta Camoa", "HomeWorld": 65535 },
+                    "Name": "Bryn Solari",
+                    "Identifier": { "Type": "Player", "PlayerName": "Bryn Solari", "HomeWorld": 65535 },
                     "Enabled": true,
                     "Designs": [
-                        { "Design": "4004bee7-d5fd-4e15-a6e3-5c75bf40038e", "Type": 31, "Conditions": { "JobGroup": 1 } }
+                        { "Design": "22222222-2222-2222-2222-222222222222", "Type": 31, "Conditions": { "JobGroup": 1 } }
                     ]
                 }
             ]
@@ -61,8 +62,8 @@ public class AutomationConfigReaderTests : IDisposable
         var map = await _reader.ReadDesignCharacterMapAsync(_tempDirectory);
 
         Assert.Equal(2, map.Count);
-        Assert.Equal("Tori Siresa", map["8d3a7aba-1c05-48c7-a758-90726dd5abe8"]);
-        Assert.Equal("Asta Camoa", map["4004bee7-d5fd-4e15-a6e3-5c75bf40038e"]);
+        Assert.Equal("Aeryn Vale", map["11111111-1111-1111-1111-111111111111"]);
+        Assert.Equal("Bryn Solari", map["22222222-2222-2222-2222-222222222222"]);
     }
 
     [Fact]
