@@ -1,6 +1,6 @@
 # Design Bulk Editor
 
-[![Build](https://github.com/STRNDV/design-bulk-editor/actions/workflows/build.yml/badge.svg)](https://github.com/STRNDV/design-bulk-editor/actions/workflows/build.yml)
+[![Build](https://github.com/STRNDV/Design-Bulk-Editor/actions/workflows/build.yml/badge.svg)](https://github.com/STRNDV/Design-Bulk-Editor/actions/workflows/build.yml)
 
 A Dalamud plugin for bulk-editing your [Glamourer](https://github.com/Ottermandias/Glamourer)
 design library - rename designs, reorganise folders, and change a property
