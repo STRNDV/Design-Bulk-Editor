@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Windowing;
 using DesignBulkEditor.Core.Models;
@@ -42,9 +44,15 @@ public sealed class MainWindow : Window, IDisposable
     private readonly GlamourerApiClient _apiClient;
     private readonly FileDialogManager _fileDialogManager = new();
 
+    private static readonly Vector4 ColorSuccess = new(0.35f, 0.85f, 0.45f, 1f);
+    private static readonly Vector4 ColorError = new(0.95f, 0.4f, 0.4f, 1f);
+    private static readonly Vector4 ColorWarning = new(0.95f, 0.75f, 0.2f, 1f);
+    private static readonly Vector4 ColorAccent = new(0.4f, 0.8f, 1f, 1f);
+
     private string _configDirectory = @"%AppData%\XIVLauncher\pluginConfigs\Glamourer";
     private DesignLibrarySnapshot? _snapshot;
     private string _statusMessage = string.Empty;
+    private bool _statusIsError;
 
     private BulkStep _step = BulkStep.Select;
 
@@ -67,6 +75,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private List<(GlamourerDesign Design, IReadOnlyList<PropertyDiff> Diffs)> _reviewItems = [];
     private string? _saveOutcomeMessage;
+    private bool _saveOutcomeIsError;
 
     // "Single Design" tab has its own, independent single-item selection -
     // deliberately unrelated to the Bulk Edit tab's multi-selection.
@@ -92,6 +101,49 @@ public sealed class MainWindow : Window, IDisposable
     {
     }
 
+    private static void Tooltip(string text)
+    {
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(text);
+    }
+
+    private void SetStatus(string message, bool isError = false)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+    }
+
+    private static readonly Vector4 ButtonPrimary = new(0.20f, 0.45f, 0.75f, 1f);
+    private static readonly Vector4 ButtonPrimaryHover = new(0.25f, 0.55f, 0.85f, 1f);
+    private static readonly Vector4 ButtonPrimaryActive = new(0.15f, 0.35f, 0.65f, 1f);
+
+    private static readonly Vector4 ButtonDanger = new(0.55f, 0.22f, 0.22f, 1f);
+    private static readonly Vector4 ButtonDangerHover = new(0.68f, 0.27f, 0.27f, 1f);
+    private static readonly Vector4 ButtonDangerActive = new(0.45f, 0.17f, 0.17f, 1f);
+
+    private static readonly Vector4 ButtonSuccess = new(0.2f, 0.5f, 0.28f, 1f);
+    private static readonly Vector4 ButtonSuccessHover = new(0.25f, 0.62f, 0.34f, 1f);
+    private static readonly Vector4 ButtonSuccessActive = new(0.15f, 0.42f, 0.22f, 1f);
+
+    /// <summary> The main forward-progress action on a screen - the one thing most people should click next. </summary>
+    private static bool PrimaryButton(string label) => ColoredButton(label, ButtonPrimary, ButtonPrimaryHover, ButtonPrimaryActive);
+
+    /// <summary> A destructive/undo action (discard, cancel, revert). </summary>
+    private static bool DangerButton(string label) => ColoredButton(label, ButtonDanger, ButtonDangerHover, ButtonDangerActive);
+
+    /// <summary> A final, writes-to-disk confirmation. </summary>
+    private static bool SuccessButton(string label) => ColoredButton(label, ButtonSuccess, ButtonSuccessHover, ButtonSuccessActive);
+
+    private static bool ColoredButton(string label, Vector4 normal, Vector4 hovered, Vector4 active)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, normal);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, hovered);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, active);
+        var clicked = ImGui.Button(label);
+        ImGui.PopStyleColor(3);
+        return clicked;
+    }
+
     private IReadOnlyList<GlamourerDesign> SelectedDesigns()
         => _snapshot is null ? [] : _snapshot.Designs.Where(d => _selectedIdentifiers.Contains(d.Identifier)).ToList();
 
@@ -102,6 +154,21 @@ public sealed class MainWindow : Window, IDisposable
         => _snapshot?.Designs.FirstOrDefault(d => d.Identifier == _singleDesignIdentifier);
 
     public override void Draw()
+    {
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 12));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8, 6));
+        try
+        {
+            DrawContent();
+        }
+        finally
+        {
+            ImGui.PopStyleVar(3);
+        }
+    }
+
+    private void DrawContent()
     {
         _fileDialogManager.Draw();
 
@@ -140,11 +207,13 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SetNextItemWidth(380);
         ImGui.InputText("Config directory", ref _configDirectory, 512);
         ImGui.SameLine();
-        if (ImGui.Button("Browse"))
+        if (ImGuiComponents.IconButton(FontAwesomeIcon.FolderOpen))
             BrowseForConfigDirectory();
+        Tooltip("Browse for the Glamourer config folder");
         ImGui.SameLine();
-        if (ImGui.Button("Load"))
+        if (ImGuiComponents.IconButton(FontAwesomeIcon.SyncAlt))
             LoadLibrary();
+        Tooltip("Load / reload the design library");
 
         var glamourerStatus = _apiClient.IsAvailable
             ? $"Glamourer live preview: available (API {_apiClient.ApiVersionNumber?.Major}.{_apiClient.ApiVersionNumber?.Minor})"
@@ -152,7 +221,17 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TextDisabled(glamourerStatus);
 
         if (!string.IsNullOrEmpty(_statusMessage))
+        {
+            DrawStatusIcon(_statusIsError);
+            ImGui.SameLine();
             ImGui.TextWrapped(_statusMessage);
+        }
+    }
+
+    private static void DrawStatusIcon(bool isError)
+    {
+        using (Plugin.PluginInterface.UiBuilder.IconFontHandle.Push())
+            ImGui.TextColored(isError ? ColorError : ColorSuccess, (isError ? FontAwesomeIcon.ExclamationCircle : FontAwesomeIcon.CheckCircle).ToIconString());
     }
 
     private void DrawPendingChangesSummary()
@@ -164,7 +243,7 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
-        ImGui.TextColored(new Vector4(0.95f, 0.75f, 0.2f, 1f),
+        ImGui.TextColored(ColorWarning,
             $"{pending.Count} design(s) in the library have unsaved edits (marked with * below).");
         ImGui.SameLine();
         if (ImGui.SmallButton("Select all unsaved and go to Edit"))
@@ -216,22 +295,35 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawStepIndicator()
     {
-        DrawStepLabel("1. Select", BulkStep.Select, SelectedDesigns().Count > 0 || _step != BulkStep.Select);
+        DrawStepLabel("1. Select", BulkStep.Select, reachable: true, isDone: _step != BulkStep.Select);
         ImGui.SameLine();
-        ImGui.TextDisabled("->");
+        DrawStepArrow();
         ImGui.SameLine();
-        DrawStepLabel("2. Edit", BulkStep.Edit, _step == BulkStep.Edit || _step == BulkStep.Review);
+        DrawStepLabel("2. Edit", BulkStep.Edit, _step == BulkStep.Edit || _step == BulkStep.Review, isDone: _step == BulkStep.Review);
         ImGui.SameLine();
-        ImGui.TextDisabled("->");
+        DrawStepArrow();
         ImGui.SameLine();
-        DrawStepLabel("3. Review and Save", BulkStep.Review, _step == BulkStep.Review);
+        DrawStepLabel("3. Review and Save", BulkStep.Review, _step == BulkStep.Review, isDone: false);
     }
 
-    private void DrawStepLabel(string label, BulkStep step, bool reachable)
+    private static void DrawStepArrow()
     {
+        using (Plugin.PluginInterface.UiBuilder.IconFontHandle.Push())
+            ImGui.TextDisabled(FontAwesomeIcon.ChevronRight.ToIconString());
+    }
+
+    private void DrawStepLabel(string label, BulkStep step, bool reachable, bool isDone)
+    {
+        if (isDone)
+        {
+            using (Plugin.PluginInterface.UiBuilder.IconFontHandle.Push())
+                ImGui.TextColored(ColorSuccess, FontAwesomeIcon.CheckCircle.ToIconString());
+            ImGui.SameLine();
+        }
+
         var isCurrent = _step == step;
         if (isCurrent)
-            ImGui.TextColored(new Vector4(0.4f, 0.8f, 1f, 1f), label);
+            ImGui.TextColored(ColorAccent, label);
         else if (reachable)
         {
             if (ImGui.Button(label))
@@ -263,7 +355,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.Spacing();
         var selectedCount = _selectedIdentifiers.Count;
         ImGui.BeginDisabled(selectedCount == 0);
-        if (ImGui.Button($"Continue with {selectedCount} selected design(s) ->"))
+        if (PrimaryButton($"Continue with {selectedCount} selected design(s) ->"))
             _step = BulkStep.Edit;
         ImGui.EndDisabled();
     }
@@ -416,7 +508,7 @@ public sealed class MainWindow : Window, IDisposable
                 ImGui.Spacing();
 
                 ImGui.BeginDisabled(_stagedEdits.Count == 0);
-                if (ImGui.Button($"Apply {_stagedEdits.Count} staged edit(s) to {selected.Count} design(s), then review ->"))
+                if (PrimaryButton($"Apply {_stagedEdits.Count} staged edit(s) to {selected.Count} design(s), then review ->"))
                     ApplyStagedEditsAndGoToReview(selected);
                 ImGui.EndDisabled();
 
@@ -437,11 +529,11 @@ public sealed class MainWindow : Window, IDisposable
         {
             ImGui.Spacing();
             ImGui.Separator();
-            ImGui.TextColored(new Vector4(0.95f, 0.75f, 0.2f, 1f), $"{pendingInSelection} of the selected design(s) already have unsaved edits.");
-            if (ImGui.Button("Review pending changes and save now ->"))
+            ImGui.TextColored(ColorWarning, $"{pendingInSelection} of the selected design(s) already have unsaved edits.");
+            if (PrimaryButton("Review pending changes and save now ->"))
                 OpenReviewStep(selected);
             ImGui.SameLine();
-            if (ImGui.Button("Discard all unsaved edits on selection"))
+            if (DangerButton("Discard all unsaved edits on selection"))
                 DiscardChangesOnSelection(selected);
         }
     }
@@ -512,10 +604,12 @@ public sealed class MainWindow : Window, IDisposable
         {
             var edit = _stagedEdits[i];
             ImGui.PushID(i);
-            ImGui.Text($"{edit.Label} -> {edit.NewValueRaw}");
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Remove"))
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.Trash))
                 _stagedEdits.RemoveAt(i);
+            Tooltip("Remove this staged edit");
+            ImGui.SameLine();
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text($"{edit.Label} -> {edit.NewValueRaw}");
             ImGui.PopID();
         }
 
@@ -594,7 +688,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.Checkbox("Case sensitive", ref _renameCaseSensitive);
 
         ImGui.BeginDisabled(string.IsNullOrEmpty(_renameFind));
-        if (ImGui.Button($"Apply rename to {selected.Count} design(s), then review ->"))
+        if (PrimaryButton($"Apply rename to {selected.Count} design(s), then review ->"))
             ApplyBatchRenameAndGoToReview(selected);
         ImGui.EndDisabled();
     }
@@ -610,7 +704,7 @@ public sealed class MainWindow : Window, IDisposable
         var outcomes = _designLibrary.ApplyPendingEdits(targets, _stagedEdits);
         var failures = outcomes.Where(o => !o.Success).ToList();
         if (failures.Count > 0)
-            _statusMessage = $"{failures.Count} propert(y/ies) could not be applied: {string.Join("; ", failures.Select(f => f.ErrorMessage))}";
+            SetStatus($"{failures.Count} propert(y/ies) could not be applied: {string.Join("; ", failures.Select(f => f.ErrorMessage))}", isError: true);
 
         OpenReviewStep(targets);
     }
@@ -623,7 +717,7 @@ public sealed class MainWindow : Window, IDisposable
 
         if (changed.Count == 0)
         {
-            _statusMessage = "No selected design matched the find text.";
+            SetStatus("No selected design matched the find text.", isError: true);
             return;
         }
 
@@ -635,7 +729,7 @@ public sealed class MainWindow : Window, IDisposable
         foreach (var design in targets)
             design.DiscardChanges();
 
-        _statusMessage = "Reverted all unsaved edits on the selected designs back to what is saved on disk.";
+        SetStatus("Reverted all unsaved edits on the selected designs back to what is saved on disk.");
     }
 
     private void OpenReviewStep(IReadOnlyList<GlamourerDesign> targets)
@@ -649,7 +743,7 @@ public sealed class MainWindow : Window, IDisposable
 
         if (_reviewItems.Count == 0)
         {
-            _statusMessage = "No pending changes on the selection to review.";
+            SetStatus("No pending changes on the selection to review.", isError: true);
             return;
         }
 
@@ -668,9 +762,11 @@ public sealed class MainWindow : Window, IDisposable
 
         if (_saveOutcomeMessage is not null)
         {
+            DrawStatusIcon(_saveOutcomeIsError);
+            ImGui.SameLine();
             ImGui.TextWrapped(_saveOutcomeMessage);
             ImGui.Spacing();
-            if (ImGui.Button("Start over ->"))
+            if (PrimaryButton("Start over ->"))
             {
                 _selectedIdentifiers.Clear();
                 _primaryIdentifier = null;
@@ -696,10 +792,10 @@ public sealed class MainWindow : Window, IDisposable
 
         ImGui.EndChild();
 
-        if (ImGui.Button("Confirm and save to disk"))
+        if (SuccessButton("Confirm and save to disk"))
             _ = ConfirmReviewAndSaveAsync();
         ImGui.SameLine();
-        if (ImGui.Button("Cancel (keep editing)"))
+        if (DangerButton("Cancel (keep editing)"))
             _step = BulkStep.Edit;
     }
 
@@ -709,6 +805,7 @@ public sealed class MainWindow : Window, IDisposable
         var results = await _designLibrary.SaveManyAsync(targets);
         var failures = results.Where(r => !r.Success).ToList();
 
+        _saveOutcomeIsError = failures.Count > 0;
         _saveOutcomeMessage = failures.Count == 0
             ? $"Saved {results.Count} design(s) to disk, with a backup of each previous version.{ReloadGlamourerReminder}"
             : $"Saved with {failures.Count} failure(s): {string.Join("; ", failures.Select(f => $"{f.SourceFile}: {f.ErrorMessage}"))}";
@@ -751,7 +848,7 @@ public sealed class MainWindow : Window, IDisposable
 
         ImGui.TextDisabled(design2.SourceFile);
         if (design2.HasPendingChanges)
-            ImGui.TextColored(new Vector4(0.95f, 0.75f, 0.2f, 1f), "This design has unsaved edits.");
+            ImGui.TextColored(ColorWarning, "This design has unsaved edits.");
 
         ImGui.Spacing();
 
@@ -771,13 +868,13 @@ public sealed class MainWindow : Window, IDisposable
 
             if (design2.HasPendingChanges)
             {
-                if (ImGui.Button("Save this design"))
+                if (PrimaryButton("Save this design"))
                     _ = SaveSingleAsync(design2);
                 ImGui.SameLine();
-                if (ImGui.Button("Discard changes"))
+                if (DangerButton("Discard changes"))
                 {
                     design2.DiscardChanges();
-                    _statusMessage = "Reverted to what is saved on disk.";
+                    SetStatus("Reverted to what is saved on disk.");
                 }
             }
         }
@@ -790,17 +887,22 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.SetNextItemWidth(260);
             ImGui.InputText("##manualAssignment", ref _manualCharacterAssignment, 128);
             ImGui.SameLine();
-            if (ImGui.Button("Assign") && !string.IsNullOrWhiteSpace(_manualCharacterAssignment))
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.Check) && !string.IsNullOrWhiteSpace(_manualCharacterAssignment))
                 _ = AssignCharacterAsync(design2, _manualCharacterAssignment);
+            Tooltip("Assign to this character");
         }
 
         if (ImGui.CollapsingHeader("Live preview"))
         {
-            if (ImGui.Button("Preview on my character") && _apiClient.IsAvailable)
+            ImGui.BeginDisabled(!_apiClient.IsAvailable);
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.Eye))
                 PreviewDesign(design2);
+            Tooltip("Preview on my character");
             ImGui.SameLine();
-            if (ImGui.Button("Revert preview"))
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.EyeSlash))
                 RevertPreview();
+            Tooltip("Revert preview");
+            ImGui.EndDisabled();
         }
 
         if (ImGui.CollapsingHeader("Backups"))
@@ -822,10 +924,12 @@ public sealed class MainWindow : Window, IDisposable
         foreach (var backup in backups)
         {
             ImGui.PushID(backup.FilePath);
+            ImGui.AlignTextToFramePadding();
             ImGui.Text(backup.TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture));
             ImGui.SameLine();
-            if (ImGui.SmallButton("Restore"))
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.History))
                 _ = RestoreBackupAsync(design, backup.FilePath);
+            Tooltip("Restore this backup");
             ImGui.PopID();
         }
     }
@@ -838,8 +942,9 @@ public sealed class MainWindow : Window, IDisposable
             return;
         }
 
-        if (ImGui.Button("Copy share code to clipboard"))
+        if (ImGuiComponents.IconButton(FontAwesomeIcon.Copy))
             ExportDesignCode(design);
+        Tooltip("Copy share code to clipboard");
 
         ImGui.Spacing();
         ImGui.TextDisabled("Import a shared code as a new design in Glamourer's library:");
@@ -847,30 +952,33 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.InputTextMultiline("##importCode", ref _importCode, 8192, new Vector2(400, 60));
         ImGui.SetNextItemWidth(240);
         ImGui.InputText("New design name", ref _importName, 128);
-        if (ImGui.Button("Import as new design") && !string.IsNullOrWhiteSpace(_importCode) && !string.IsNullOrWhiteSpace(_importName))
+        ImGui.BeginDisabled(string.IsNullOrWhiteSpace(_importCode) || string.IsNullOrWhiteSpace(_importName));
+        if (PrimaryButton("Import as new design"))
             ImportDesignCode();
+        ImGui.EndDisabled();
     }
 
     private void ExportDesignCode(GlamourerDesign design)
     {
         var result = _apiClient.ExportDesignAsCode(design.Identifier);
-        _statusMessage = result.Success && result.Value is not null
-            ? SetClipboardAndDescribe(result.Value)
-            : $"Export failed: {result.ErrorMessage}";
-    }
-
-    private static string SetClipboardAndDescribe(string code)
-    {
-        ImGui.SetClipboardText(code);
-        return "Share code copied to clipboard.";
+        if (result.Success && result.Value is not null)
+        {
+            ImGui.SetClipboardText(result.Value);
+            SetStatus("Share code copied to clipboard.");
+        }
+        else
+        {
+            SetStatus($"Export failed: {result.ErrorMessage}", isError: true);
+        }
     }
 
     private void ImportDesignCode()
     {
         var result = _apiClient.ImportDesignFromCode(_importCode, _importName);
-        _statusMessage = result.Success
-            ? $"Imported new design '{_importName}'. Reload the library to see it."
-            : $"Import failed: {result.ErrorMessage}";
+        if (result.Success)
+            SetStatus($"Imported new design '{_importName}'. Reload the library to see it.");
+        else
+            SetStatus($"Import failed: {result.ErrorMessage}", isError: true);
     }
 
     private void PreviewDesign(GlamourerDesign design)
@@ -878,14 +986,15 @@ public sealed class MainWindow : Window, IDisposable
         var objectIndex = Plugin.ObjectTable.LocalPlayer?.ObjectIndex;
         if (objectIndex is null)
         {
-            _statusMessage = "No local player found - log in to preview.";
+            SetStatus("No local player found - log in to preview.", isError: true);
             return;
         }
 
         var result = _apiClient.ApplyPreview(design.BuildWorkingSnapshot(), objectIndex.Value);
-        _statusMessage = result.Success
-            ? "Preview applied to your character."
-            : $"Preview failed: {result.ErrorMessage}";
+        if (result.Success)
+            SetStatus("Preview applied to your character.");
+        else
+            SetStatus($"Preview failed: {result.ErrorMessage}", isError: true);
     }
 
     private void RevertPreview()
@@ -895,31 +1004,34 @@ public sealed class MainWindow : Window, IDisposable
             return;
 
         var result = _apiClient.RevertPreview(objectIndex.Value);
-        _statusMessage = result.Success
-            ? "Preview reverted."
-            : $"Revert failed: {result.ErrorMessage}";
+        if (result.Success)
+            SetStatus("Preview reverted.");
+        else
+            SetStatus($"Revert failed: {result.ErrorMessage}", isError: true);
     }
 
     private async Task SaveSingleAsync(GlamourerDesign design)
     {
         var result = await _designLibrary.SaveAsync(design);
-        _statusMessage = result.Success
-            ? $"Saved to disk, with a backup of the previous version.{ReloadGlamourerReminder}"
-            : $"Save failed: {result.ErrorMessage}";
+        if (result.Success)
+            SetStatus($"Saved to disk, with a backup of the previous version.{ReloadGlamourerReminder}");
+        else
+            SetStatus($"Save failed: {result.ErrorMessage}", isError: true);
     }
 
     private async Task RestoreBackupAsync(GlamourerDesign design, string backupPath)
     {
         var result = await _designLibrary.RestoreBackupAsync(design, backupPath);
-        _statusMessage = result.Success
-            ? $"Restored from backup (the pre-restore state was itself backed up).{ReloadGlamourerReminder}"
-            : $"Restore failed: {result.ErrorMessage}";
+        if (result.Success)
+            SetStatus($"Restored from backup (the pre-restore state was itself backed up).{ReloadGlamourerReminder}");
+        else
+            SetStatus($"Restore failed: {result.ErrorMessage}", isError: true);
     }
 
     private async Task AssignCharacterAsync(GlamourerDesign design, string characterName)
     {
         await _designLibrary.AssignCharacterAsync(design, characterName);
-        _statusMessage = $"Assigned '{design.ReconstructedName}' to '{characterName}'.";
+        SetStatus($"Assigned '{design.ReconstructedName}' to '{characterName}'.");
     }
 
     private void LoadLibrary()
@@ -932,12 +1044,23 @@ public sealed class MainWindow : Window, IDisposable
             _primaryIdentifier = null;
             _singleDesignIdentifier = null;
             _step = BulkStep.Select;
-            _statusMessage = $"Loaded {_snapshot.Designs.Count} design(s) across {_snapshot.Groups.Count} character group(s).";
+
+            var baseMessage = $"Loaded {_snapshot.Designs.Count} design(s) across {_snapshot.Groups.Count} character group(s).";
+            if (_snapshot.Issues.Count == 0)
+            {
+                SetStatus(baseMessage);
+            }
+            else
+            {
+                var skipped = string.Join("; ", _snapshot.Issues.Select(i => $"{Path.GetFileName(i.FilePath)} ({i.ErrorMessage})"));
+                SetStatus($"{baseMessage} {_snapshot.Issues.Count} file(s) could not be read and were skipped: {skipped}", isError: true);
+            }
+
             _apiClient.Refresh();
         }
         catch (Exception ex)
         {
-            _statusMessage = $"Load failed: {ex.Message}";
+            SetStatus($"Load failed: {ex.Message}", isError: true);
         }
     }
 }

@@ -19,7 +19,8 @@ public sealed class DesignRepository
     public DesignRepository(BackupService backupService)
         => _backupService = backupService;
 
-    public async Task<IReadOnlyList<GlamourerDesign>> LoadAsync(string configDirectory, CancellationToken cancellationToken = default)
+    /// <summary> Scans the designs folder. A single malformed or unreadable file never blocks the rest of the library from loading - it's reported as an issue instead. </summary>
+    public async Task<DesignLoadResult> LoadAsync(string configDirectory, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configDirectory);
 
@@ -28,16 +29,31 @@ public sealed class DesignRepository
             throw new DirectoryNotFoundException($"No 'designs' folder found under '{configDirectory}'.");
 
         var designs = new List<GlamourerDesign>();
+        var issues = new List<DesignLoadIssue>();
+
         foreach (var file in Directory.EnumerateFiles(designsDirectory, "*.json", SearchOption.TopDirectoryOnly))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            await using var stream = File.OpenRead(file);
-            if (await JsonNode.ParseAsync(stream, cancellationToken: cancellationToken) is JsonObject obj)
-                designs.Add(new GlamourerDesign(file, obj));
+            try
+            {
+                await using var stream = File.OpenRead(file);
+                if (await JsonNode.ParseAsync(stream, cancellationToken: cancellationToken) is JsonObject obj)
+                    designs.Add(new GlamourerDesign(file, obj));
+                else
+                    issues.Add(new DesignLoadIssue(file, "File does not contain a JSON object."));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                issues.Add(new DesignLoadIssue(file, ex.Message));
+            }
         }
 
-        return designs;
+        return new DesignLoadResult(designs, issues);
     }
 
     /// <summary> Saves one design. Never throws for expected failure modes; the result carries the outcome. </summary>

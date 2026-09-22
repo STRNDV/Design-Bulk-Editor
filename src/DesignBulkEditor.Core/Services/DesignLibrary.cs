@@ -34,7 +34,8 @@ public sealed class DesignLibrary
 
     public async Task<DesignLibrarySnapshot> LoadAsync(string configDirectory, CancellationToken cancellationToken = default)
     {
-        var designs = await _repository.LoadAsync(configDirectory, cancellationToken);
+        var loadResult = await _repository.LoadAsync(configDirectory, cancellationToken);
+        var designs = loadResult.Designs;
 
         await _assignmentStore.LoadAsync(cancellationToken);
         var automationMap = await _automationReader.ReadDesignCharacterMapAsync(configDirectory, cancellationToken);
@@ -52,7 +53,7 @@ public sealed class DesignLibrary
             .Select(g => new CharacterDesignGroup(g.Key, g.ToList()))
             .ToList();
 
-        return new DesignLibrarySnapshot(configDirectory, designs, groups);
+        return new DesignLibrarySnapshot(configDirectory, designs, groups, loadResult.Issues);
     }
 
     /// <summary> Explicitly and durably assigns a design to a character, overriding any heuristic suggestion from now on. </summary>

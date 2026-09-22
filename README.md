@@ -52,6 +52,8 @@ below.
   as a new design, using Glamourer's own encoder/decoder via its IPC
 - Never aborts a batch save partway through: if one design fails, the rest
   still get processed, and you get a clear per-design error report
+- Never aborts *loading* either: a single malformed design file is skipped
+  and reported, not a reason the rest of your library fails to load
 
 ### Explicitly out of scope for v1
 
@@ -90,6 +92,13 @@ A library-wide "N designs have unsaved edits" summary is always visible
 regardless of which tab or step you're on, with a one-click way to select
 exactly those and jump straight to Edit - so nothing edited earlier can go
 quietly forgotten.
+
+Status feedback is colour- and icon-coded (green check for success, red for
+failure) instead of one uniform grey line, the step indicator shows a
+checkmark on completed steps, and the primary action on each screen is
+visually distinct from destructive ones (discard/cancel) and from plain
+navigation (back) - the goal being a plugin that doesn't look or feel like
+a bare default ImGui panel.
 
 ## Character assignment
 

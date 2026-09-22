@@ -241,4 +241,34 @@ public class DesignLibraryTests : IDisposable
         Assert.Equal("Corin Ashfell", matching.CharacterName);
         Assert.Equal("Bryn Solari", nonMatching.CharacterName);
     }
+
+    [Fact]
+    public async Task LoadAsyncSkipsAMalformedFileInsteadOfFailingTheWholeLibrary()
+    {
+        // Regression guard: loading must never be all-or-nothing. A single corrupted
+        // design file (e.g. from a crash mid-write outside this app) must not make the
+        // rest of a user's library unloadable.
+        WriteDesignFile("good.json", "(Aeryn Vale) Casual");
+        var badPath = Path.Combine(_tempDirectory, "designs", "corrupted.json");
+        await File.WriteAllTextAsync(badPath, "{ this is not valid json ");
+
+        var snapshot = await _library.LoadAsync(_tempDirectory);
+
+        var design = Assert.Single(snapshot.Designs);
+        Assert.Equal("(Aeryn Vale) Casual", design.ReconstructedName);
+
+        var issue = Assert.Single(snapshot.Issues);
+        Assert.Equal(badPath, issue.FilePath);
+        Assert.NotEmpty(issue.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoadAsyncReportsNoIssuesWhenEveryFileIsValid()
+    {
+        WriteDesignFile("a.json", "(Aeryn Vale) Casual");
+
+        var snapshot = await _library.LoadAsync(_tempDirectory);
+
+        Assert.Empty(snapshot.Issues);
+    }
 }
