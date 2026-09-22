@@ -30,6 +30,14 @@ public sealed class MainWindow : Window, IDisposable
     private static readonly string[] Sections = ["Customize", "Equipment", "Parameters"];
     private static readonly string[] RenameTargetLabels = ["Character name", "Design name", "Both"];
 
+    // Glamourer has no IPC call to tell it a design file changed on disk, and it
+    // only reads its design library from disk when it (re)loads - it doesn't
+    // notice files we've changed underneath it while it's running. Reloading the
+    // plugin (not the whole game) is enough: Dalamud disposes and reconstructs
+    // it, which re-reads everything fresh.
+    private const string ReloadGlamourerReminder =
+        " Glamourer won't see this until you reload it: Dalamud Plugin Installer -> Glamourer -> toggle it off and back on (no game restart needed).";
+
     private readonly DesignLibrary _designLibrary;
     private readonly GlamourerApiClient _apiClient;
     private readonly FileDialogManager _fileDialogManager = new();
@@ -702,7 +710,7 @@ public sealed class MainWindow : Window, IDisposable
         var failures = results.Where(r => !r.Success).ToList();
 
         _saveOutcomeMessage = failures.Count == 0
-            ? $"Saved {results.Count} design(s) to disk, with a backup of each previous version."
+            ? $"Saved {results.Count} design(s) to disk, with a backup of each previous version.{ReloadGlamourerReminder}"
             : $"Saved with {failures.Count} failure(s): {string.Join("; ", failures.Select(f => $"{f.SourceFile}: {f.ErrorMessage}"))}";
     }
 
@@ -896,7 +904,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         var result = await _designLibrary.SaveAsync(design);
         _statusMessage = result.Success
-            ? "Saved to disk, with a backup of the previous version."
+            ? $"Saved to disk, with a backup of the previous version.{ReloadGlamourerReminder}"
             : $"Save failed: {result.ErrorMessage}";
     }
 
@@ -904,7 +912,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         var result = await _designLibrary.RestoreBackupAsync(design, backupPath);
         _statusMessage = result.Success
-            ? "Restored from backup (the pre-restore state was itself backed up)."
+            ? $"Restored from backup (the pre-restore state was itself backed up).{ReloadGlamourerReminder}"
             : $"Restore failed: {result.ErrorMessage}";
     }
 

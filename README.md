@@ -152,6 +152,16 @@ hand-written or guessed IPC calls:
   `UpdateDesign` call in Glamourer's IPC, so committing a change has always
   meant writing the JSON file directly, both in the old app and this one.
 
+### Known limitation: Glamourer needs a reload to see saved changes
+
+Because there's no `UpdateDesign` IPC call, there's also no way for this
+plugin to tell Glamourer "this design file changed" - and Glamourer only
+reads its design library from disk when it (re)loads, not while it's
+running. After saving, Glamourer's own design list/UI won't reflect the
+change until you reload *Glamourer* (not the whole game): Dalamud Plugin
+Installer → find Glamourer → toggle it off and back on. The plugin reminds
+you of this in its own status message after every save/restore.
+
 ## Building
 
 Requires the .NET 10 SDK and a local Dalamud install (via XIVLauncher) for
@@ -223,8 +233,9 @@ is uploaded anywhere.
 
 ## Status
 
-Early, hand-built v1. The Core library has full unit test coverage; the
-Plugin UI has been verified to build against a real, locally installed
-Glamourer 1.7.1.3 / Dalamud API level 15, but still needs an in-game smoke
-test pass (load a real design folder, stage edits across sections, preview,
-save, confirm backups) before being called stable.
+v0.1.2. The Core library has full unit test coverage. The Plugin has been
+smoke-tested in-game against a real, locally installed Glamourer 1.7.1.3 /
+Dalamud API level 15: loading a real design folder, selecting many designs
+across characters, staging and applying property edits in bulk, reviewing
+and saving, and installing/updating through both a local dev-plugin build
+and the published `repo.json`.
