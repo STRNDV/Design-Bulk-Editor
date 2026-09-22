@@ -341,14 +341,17 @@ public sealed class MainWindow : Window, IDisposable
                            "losing the rest; clicking a name selects only that one; Ctrl+click adds/removes.");
         ImGui.Spacing();
 
-        var contentHeight = ImGui.GetContentRegionAvail().Y - 40;
+        // Both lists must reserve the same footer space for the Continue button below -
+        // a plain Vector2.Zero child here would fill the entire remaining height and
+        // push that button below the visible window, forcing a scroll to find it.
+        var listHeight = ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeightWithSpacing();
 
-        ImGui.BeginChild("CharacterList", new Vector2(200, contentHeight), true);
+        ImGui.BeginChild("CharacterList", new Vector2(200, listHeight), true);
         DrawCharacterList();
         ImGui.EndChild();
 
         ImGui.SameLine();
-        ImGui.BeginChild("DesignList", Vector2.Zero, true);
+        ImGui.BeginChild("DesignList", new Vector2(0, listHeight), true);
         DrawDesignList();
         ImGui.EndChild();
 
@@ -781,7 +784,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.TextWrapped($"{_reviewItems.Count} design(s) have pending changes. Nothing is written until you confirm.");
         ImGui.Separator();
 
-        ImGui.BeginChild("ReviewList", new Vector2(0, ImGui.GetContentRegionAvail().Y - 50), true);
+        ImGui.BeginChild("ReviewList", new Vector2(0, ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeightWithSpacing()), true);
         foreach (var (design, diffs) in _reviewItems)
         {
             ImGui.TextUnformatted(design.ReconstructedName);
