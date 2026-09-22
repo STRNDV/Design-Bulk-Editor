@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>DesignBulkEditor</AssemblyName>
     <RootNamespace>DesignBulkEditor.Plugin</RootNamespace>
-    <Version>0.1.3</Version>
+    <Version>0.1.4</Version>
     <Name>Design Bulk Editor</Name>
     <Author>STRNDV</Author>
     <Punchline>Bulk-edit your Glamourer design library and preview changes live, without leaving the game.</Punchline>
